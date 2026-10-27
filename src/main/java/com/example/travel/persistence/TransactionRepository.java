@@ -93,6 +93,7 @@ public class TransactionRepository {
     return one("SELECT " + COLUMNS + " FROM transactions WHERE external_id=?", externalId);
   }
 
+  // Offset paging is fine at this size; keyset on seq would be the next step for deep pages.
   public Page<Transaction> list(int limit, int offset) {
     List<Row> rows =
         jdbc.query(

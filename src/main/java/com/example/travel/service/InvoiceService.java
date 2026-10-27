@@ -60,6 +60,7 @@ public class InvoiceService {
     return invoices.list(limit, offset);
   }
 
+  // Hard delete, as the brief asks. A real billing system would void or credit instead.
   public void delete(String id) {
     if (!invoices.delete(id)) {
       throw notFound(id);

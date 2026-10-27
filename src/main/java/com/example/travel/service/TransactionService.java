@@ -80,6 +80,7 @@ public class TransactionService {
     return transactions.list(limit, offset);
   }
 
+  // Last write wins. A version column with If-Match would catch stale clients.
   public Transaction patch(String id, JsonNode body) {
     TransactionPatch p = validator.parsePatch(body);
     tx.executeWithoutResult(

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   destination    TEXT,
   hotel_name     TEXT,
   fee_kind       TEXT,
+  -- Coupons, legs and hotel details stay in this JSON. Child tables would make them queryable.
   metadata_json  TEXT    NOT NULL,
   created_at     TEXT    NOT NULL,
   updated_at     TEXT    NOT NULL

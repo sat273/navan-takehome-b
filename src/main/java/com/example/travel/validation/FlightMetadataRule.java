@@ -16,6 +16,7 @@ class FlightMetadataRule implements MetadataRule {
   public MetadataSummary validate(JsonNode m) {
     String origin = text(m, "origin");
     String destination = text(m, "destination");
+    // Not checked: fare + taxes + fees equalling the total. The brief does not ask for it.
     amount(m, "fare");
     for (JsonNode c : nonEmptyArray(m, "coupons", "flight metadata.coupons")) {
       requireObject(c, "coupon");

@@ -23,3 +23,12 @@ What breaks first: (1) concurrent writers contending on SQLite's single write lo
 - Duplicates: UNIQUE index on `external_id`, conflict handled, not pre-checked only.
 - Lists: `LIMIT/OFFSET` in SQL, max 100, `has_more` via limit+1 (no COUNT(*)), tax/fee lines for a page loaded with two `IN` queries (no N+1). Offset paging gets slower on deep pages; keyset on `seq` is the next step.
 - Indexes: `transactions(id)`, `transactions(external_id)` UNIQUE, `idx_invoice_lines_tx(transaction_id)`, indexes on every child-table foreign key.
+
+## Next steps (left out on purpose)
+- Keyset pagination on `seq` instead of offset, for deep pages.
+- A `version` column with `If-Match`, so stale PATCHes get 412 instead of last-write-wins.
+- `flight_coupons` and `rail_legs` child tables if anyone needs to query inside them.
+- Check that `total` equals fare + taxes + fees.
+- Per-currency minor units (JPY, KWD) instead of a fixed scale of 2.
+- Void/credit-note flow instead of hard-deleting invoices.
+- Flyway migrations, and Postgres once SQLite's single writer becomes the limit.

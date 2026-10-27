@@ -3,6 +3,7 @@ package com.example.travel.model;
 import java.math.BigDecimal;
 
 /** Stored as integer cents, exposed as BigDecimal with scale 2. */
+// Scale 2 suits EUR/USD; currencies like JPY or KWD would need a per-currency scale.
 public final class Money {
   public static final int SCALE = 2;
 
