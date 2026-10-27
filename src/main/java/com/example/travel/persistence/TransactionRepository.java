@@ -81,7 +81,6 @@ public class TransactionRepository {
     }
   }
 
-  /** Lines are removed by ON DELETE CASCADE in the same statement. */
   public boolean delete(String id) {
     return jdbc.update("DELETE FROM transactions WHERE id=?", id) > 0;
   }
@@ -131,7 +130,7 @@ public class TransactionRepository {
             Instant.parse(rs.getString("updated_at"))));
   }
 
-  /** Loads tax/fee lines for the whole page with two queries (no N+1). */
+  /** One query each for tax and fee lines, so no N+1. */
   private List<Transaction> hydrate(List<Row> rows) {
     if (rows.isEmpty()) {
       return List.of();

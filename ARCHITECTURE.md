@@ -1,9 +1,11 @@
 # Architecture
 
-Layers: `api` (controllers, error mapping) -> `service` (TransactionService, InvoiceService: rules and DB transactions) -> `persistence` (JdbcTemplate repositories) ; `validation` (envelope + per-type metadata); `model` (records).
+Layers: `api` (controllers, error mapping) -> `service` (TransactionService, InvoiceService: rules and DB transactions) -> `persistence` (JdbcTemplate repositories) ; `validation` (envelope checks plus one `MetadataRule` bean per type, so a new type is a new class); `model` (immutable records). `InvoiceSnapshotBuilder` is a stateless component holding the copy and rollup logic. All beans are stateless singletons, so there is no shared mutable state between request threads.
 
 ## external_id uniqueness and concurrent POSTs
 `transactions.external_id` has a UNIQUE index. POST does a cheap lookup first (fast path for sequential duplicates), then inserts header + tax lines + fee lines + metadata in one DB transaction. If two POSTs race, the loser's INSERT violates the unique index, rolls back, and the service re-reads the winner and returns `409` with its id. No in-memory state, no locks beyond the DB. Covered by a test that fires 8 simultaneous POSTs x 5 rounds.
+
+A lock timeout that still happens under extreme load returns `503` with `Retry-After`, not a 500. Race tests cover duplicate POSTs, PATCH vs invoice create, and DELETE vs invoice create.
 
 SQLite runs with WAL, `busy_timeout=10s` and `transaction_mode=IMMEDIATE`, so write transactions queue on the write lock instead of failing on lock upgrade, and readers are never blocked.
 

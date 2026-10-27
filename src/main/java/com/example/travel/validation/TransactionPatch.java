@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
-/** Null means "field not supplied, leave unchanged". */
+/** Null means the field was not sent. */
 public record TransactionPatch(
     Instant occurredAt,
     BigDecimal total,

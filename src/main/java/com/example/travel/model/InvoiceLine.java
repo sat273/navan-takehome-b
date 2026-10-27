@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
-/** Frozen copy of a transaction as it was when the invoice was built. */
+/** Copy of a transaction as it was at invoice time. */
 public record InvoiceLine(
     String transactionId,
     String type,

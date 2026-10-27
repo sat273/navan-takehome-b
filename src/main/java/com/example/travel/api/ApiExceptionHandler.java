@@ -36,8 +36,24 @@ public class ApiExceptionHandler {
 
   @ExceptionHandler(Exception.class)
   ResponseEntity<Map<String, Object>> handleUnexpected(Exception e) {
+    if (isLockTimeout(e)) {
+      log.warn("Database busy", e);
+      return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+          .header("Retry-After", "1")
+          .body(Map.of("error", "database_busy", "message", "Database is busy, retry shortly"));
+    }
     log.error("Unhandled error", e);
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
         .body(Map.of("error", "internal_error", "message", "Unexpected error"));
+  }
+
+  private static boolean isLockTimeout(Throwable e) {
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      String m = t.getMessage();
+      if (m != null && (m.contains("SQLITE_BUSY") || m.contains("database is locked"))) {
+        return true;
+      }
+    }
+    return false;
   }
 }

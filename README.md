@@ -16,7 +16,7 @@ Listens on `:8080` (`PORT` to change). DB file: `./data/travel.db` (`DB_PATH` to
 ./mvnw test
 ```
 
-18 tests hit the real HTTP server (random port) with a temp SQLite file, using `fixtures/task-b/`.
+20 tests hit the real HTTP server (random port) with a temp SQLite file, using `fixtures/task-b/`.
 
 ## Decisions
 

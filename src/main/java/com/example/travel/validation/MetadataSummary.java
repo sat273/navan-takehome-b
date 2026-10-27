@@ -1,4 +1,4 @@
 package com.example.travel.validation;
 
-/** Type-specific values lifted out of metadata into indexed columns. */
+/** Values copied from metadata into queryable columns. */
 public record MetadataSummary(String origin, String destination, String hotelName, String feeKind) {}

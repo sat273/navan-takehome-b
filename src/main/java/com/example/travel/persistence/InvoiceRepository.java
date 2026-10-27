@@ -27,7 +27,6 @@ public class InvoiceRepository {
     this.mapper = mapper;
   }
 
-  /** Uses idx_invoice_lines_tx. */
   public boolean isTransactionBilled(String transactionId) {
     return !jdbc.queryForList(
             "SELECT 1 FROM invoice_lines WHERE transaction_id=? LIMIT 1", transactionId)
@@ -45,7 +44,7 @@ public class InvoiceRepository {
     writeContents(seqOf(inv.id()), inv);
   }
 
-  /** Replaces header totals and the whole snapshot; the caller runs this in one DB transaction. */
+  /** Caller wraps this in a DB transaction. */
   public void replaceContents(Invoice inv) {
     long seq = seqOf(inv.id());
     jdbc.update(

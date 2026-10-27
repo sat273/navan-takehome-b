@@ -43,8 +43,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   updated_at   TEXT    NOT NULL
 );
 
--- Frozen copy of each included transaction. transaction_id is a RESTRICT foreign key so the
--- database itself refuses to delete a billed transaction, even if the service check were raced.
+-- Snapshot rows. The RESTRICT key makes the DB itself refuse to delete a billed transaction.
 CREATE TABLE IF NOT EXISTS invoice_lines (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   invoice_seq    INTEGER NOT NULL REFERENCES invoices(seq) ON DELETE CASCADE,

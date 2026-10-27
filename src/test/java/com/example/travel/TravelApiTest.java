@@ -143,7 +143,6 @@ class TravelApiTest {
     assertThat(dup.body().get("id").asText()).isEqualTo(id);
     assertThat(dup.body().get("existing_id").asText()).isEqualTo(id);
 
-    // The fixture's duplicate body (different metadata) is also rejected as a duplicate.
     Resp dup2 = api.post("/transactions", ApiTestSupport.seed("duplicate_flight"));
     assertThat(dup2.status()).isEqualTo(409);
     assertThat(count("transactions")).isEqualTo(1);
@@ -199,7 +198,7 @@ class TravelApiTest {
     List<String> ids = createTrip();
     String invId = invoiceTrip(ids).body().get("id").asText();
 
-    // Bypass the API guard (which would 409) to prove the snapshot is a copy, not a live join.
+    // Write to the table directly, since the API would refuse with 409.
     jdbc.update("UPDATE transactions SET total_minor = 99999 WHERE id = ?", ids.get(0));
     jdbc.update(
         "UPDATE transaction_tax_lines SET amount_minor = 1 WHERE transaction_seq ="
@@ -306,6 +305,77 @@ class TravelApiTest {
   }
 
   @Test
+  void patchRacingInvoiceCreationNeverLeavesAStaleSnapshot() throws Exception {
+    for (int round = 0; round < 10; round++) {
+      ObjectNode body = (ObjectNode) ApiTestSupport.seed("flight");
+      body.put("external_id", "patch-race-" + round);
+      String id = api.post("/transactions", body).body().get("id").asText();
+
+      ExecutorService pool = Executors.newFixedThreadPool(2);
+      CountDownLatch start = new CountDownLatch(1);
+      Future<Resp> patch =
+          pool.submit(
+              () -> {
+                start.await();
+                return api.patch("/transactions/" + id, ApiTestSupport.MAPPER.createObjectNode().put("total", 999.0));
+              });
+      Future<Resp> invoice =
+          pool.submit(
+              () -> {
+                start.await();
+                return api.post("/invoices", ApiTestSupport.MAPPER.createObjectNode().put("transaction_id", id));
+              });
+      start.countDown();
+      int patchStatus = patch.get().status();
+      Resp inv = invoice.get();
+      pool.shutdown();
+
+      assertThat(inv.status()).isEqualTo(201);
+      BigDecimal current = dec(api.get("/transactions/" + id).body().get("total"));
+      // Either the patch landed first and the invoice saw it, or the invoice won and the patch got 409.
+      assertThat(dec(inv.body().get("total"))).isEqualByComparingTo(current);
+      assertThat(patchStatus).isIn(200, 409);
+      assertThat(patchStatus == 409).isEqualTo(current.compareTo(new BigDecimal("999")) != 0);
+    }
+  }
+
+  @Test
+  void deleteRacingInvoiceCreationIsConsistent() throws Exception {
+    for (int round = 0; round < 10; round++) {
+      ObjectNode body = (ObjectNode) ApiTestSupport.seed("flight");
+      body.put("external_id", "delete-race-" + round);
+      String id = api.post("/transactions", body).body().get("id").asText();
+
+      ExecutorService pool = Executors.newFixedThreadPool(2);
+      CountDownLatch start = new CountDownLatch(1);
+      Future<Resp> del =
+          pool.submit(
+              () -> {
+                start.await();
+                return api.delete("/transactions/" + id);
+              });
+      Future<Resp> invoice =
+          pool.submit(
+              () -> {
+                start.await();
+                return api.post("/invoices", ApiTestSupport.MAPPER.createObjectNode().put("transaction_id", id));
+              });
+      start.countDown();
+      int delStatus = del.get().status();
+      int invStatus = invoice.get().status();
+      pool.shutdown();
+
+      // Exactly one of them wins; an invoice must never point at a deleted transaction.
+      assertThat(delStatus == 204 ? invStatus == 404 : delStatus == 409 && invStatus == 201).isTrue();
+      assertThat(jdbc.queryForObject(
+              "SELECT COUNT(*) FROM invoice_lines l LEFT JOIN transactions t ON t.id = l.transaction_id"
+                  + " WHERE t.id IS NULL",
+              Integer.class))
+          .isZero();
+    }
+  }
+
+  @Test
   void patchBeforeInvoicingWorksAndAfterInvoicingIs409() {
     String id = create("flight");
     ObjectNode patch = ApiTestSupport.MAPPER.createObjectNode().put("total", 230.5);
@@ -349,7 +419,6 @@ class TravelApiTest {
     assertThat(api.delete("/invoices/" + invId).status()).isEqualTo(404);
     ids.forEach(id -> assertThat(api.get("/transactions/" + id).status()).isEqualTo(200));
     assertThat(count("invoice_lines")).isZero();
-    // Once the invoice is gone the transaction is editable again.
     assertThat(api.delete("/transactions/" + ids.get(0)).status()).isEqualTo(204);
   }
 
@@ -382,7 +451,6 @@ class TravelApiTest {
     assertThat(api.patch("/invoices/" + invId, missing).status()).isEqualTo(404);
     assertThat(api.patch("/invoices/inv_nope", body).status()).isEqualTo(404);
 
-    // Rail dropped from the invoice becomes editable again.
     ObjectNode only = ApiTestSupport.MAPPER.createObjectNode().put("transaction_id", flight);
     assertThat(api.patch("/invoices/" + invId, only).status()).isEqualTo(200);
     assertThat(api.delete("/transactions/" + rail).status()).isEqualTo(204);

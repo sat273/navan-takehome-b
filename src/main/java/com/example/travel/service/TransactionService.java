@@ -38,9 +38,8 @@ public class TransactionService {
   }
 
   /**
-   * Duplicate identity is enforced by the UNIQUE index on external_id. The up-front lookup only
-   * makes the common sequential duplicate cheap; when two POSTs race, the loser's INSERT fails,
-   * its transaction rolls back, and we re-read the winner to report its id.
+   * The UNIQUE index on external_id is the real guard. The lookup up front is just a fast path;
+   * if two POSTs race, the loser's insert fails and we re-read the winner to report its id.
    */
   public Transaction create(JsonNode body) {
     TransactionInput in = validator.parseEnvelope(body);

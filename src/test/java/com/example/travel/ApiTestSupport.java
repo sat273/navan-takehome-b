@@ -11,13 +11,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-/** Real HTTP calls against the running Spring Boot server (java.net.http so PATCH works). */
+/** Plain HTTP client for the tests; java.net.http because TestRestTemplate lacks PATCH. */
 final class ApiTestSupport {
   record Resp(int status, JsonNode body) {}
 
   static final ObjectMapper MAPPER = new ObjectMapper();
   private static final HttpClient CLIENT = HttpClient.newHttpClient();
-  private static JsonNode seeds;
+  private static final JsonNode SEEDS = loadSeeds();
 
   private final String base;
 
@@ -25,16 +25,17 @@ final class ApiTestSupport {
     this.base = "http://localhost:" + port;
   }
 
-  static JsonNode seed(String name) {
+  private static JsonNode loadSeeds() {
     try {
-      if (seeds == null) {
-        Path p = Paths.get("fixtures/task-b/seed-payloads.json");
-        seeds = MAPPER.readTree(Files.readString(p));
-      }
-      return seeds.get(name).deepCopy();
+      Path p = Paths.get("fixtures/task-b/seed-payloads.json");
+      return MAPPER.readTree(Files.readString(p));
     } catch (IOException e) {
       throw new IllegalStateException(e);
     }
+  }
+
+  static JsonNode seed(String name) {
+    return SEEDS.get(name).deepCopy();
   }
 
   Resp send(String method, String path, Object body) {

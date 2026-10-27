@@ -2,7 +2,7 @@ package com.example.travel.model;
 
 import java.math.BigDecimal;
 
-/** Amounts are stored as integer minor units (scale 2) and exposed as BigDecimal with scale 2. */
+/** Stored as integer cents, exposed as BigDecimal with scale 2. */
 public final class Money {
   public static final int SCALE = 2;
 

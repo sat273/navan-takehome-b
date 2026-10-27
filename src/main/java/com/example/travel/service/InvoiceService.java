@@ -1,23 +1,17 @@
 package com.example.travel.service;
 
 import com.example.travel.api.ApiException;
-import com.example.travel.model.FeeLine;
 import com.example.travel.model.Invoice;
-import com.example.travel.model.InvoiceLine;
 import com.example.travel.model.InvoiceSummary;
 import com.example.travel.model.Page;
-import com.example.travel.model.TaxLine;
 import com.example.travel.model.Transaction;
 import com.example.travel.persistence.InvoiceRepository;
 import com.example.travel.persistence.TransactionRepository;
 import com.fasterxml.jackson.databind.JsonNode;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -27,12 +21,17 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class InvoiceService {
   private final InvoiceRepository invoices;
   private final TransactionRepository transactions;
+  private final InvoiceSnapshotBuilder builder;
   private final TransactionTemplate tx;
 
   public InvoiceService(
-      InvoiceRepository invoices, TransactionRepository transactions, TransactionTemplate tx) {
+      InvoiceRepository invoices,
+      TransactionRepository transactions,
+      InvoiceSnapshotBuilder builder,
+      TransactionTemplate tx) {
     this.invoices = invoices;
     this.transactions = transactions;
+    this.builder = builder;
     this.tx = tx;
   }
 
@@ -67,7 +66,7 @@ public class InvoiceService {
     }
   }
 
-  /** Must run inside the caller's DB transaction so the transactions read here cannot change before commit. */
+  /** Call inside a DB transaction so the transactions can't change before commit. */
   private Invoice snapshot(String id, List<String> ids, Instant createdAt, Instant updatedAt) {
     List<Transaction> txs = new ArrayList<>();
     for (String tid : ids) {
@@ -76,66 +75,10 @@ public class InvoiceService {
               .findById(tid)
               .orElseThrow(() -> ApiException.notFound("Transaction " + tid + " not found")));
     }
-    String currency = txs.get(0).currency();
-    for (Transaction t : txs) {
-      if (!t.currency().equals(currency)) {
-        throw ApiException.conflict(
-            "mixed_currency",
-            "Invoice cannot mix currencies: " + currency + " and " + t.currency());
-      }
-    }
-
-    BigDecimal total = BigDecimal.ZERO;
-    List<InvoiceLine> lines = new ArrayList<>();
-    for (Transaction t : txs) {
-      total = total.add(t.total());
-      lines.add(
-          new InvoiceLine(
-              t.id(),
-              t.type(),
-              t.externalId(),
-              t.currency(),
-              t.occurredAt(),
-              t.total(),
-              t.taxLines(),
-              t.feeLines(),
-              t.metadata()));
-    }
-    return new Invoice(
-        id,
-        currency,
-        total.setScale(2),
-        lines,
-        taxRollup(txs),
-        feeRollup(txs),
-        createdAt,
-        updatedAt);
+    return builder.build(id, txs, createdAt, updatedAt);
   }
 
-  /** Tax lines are grouped by (name, rate); the rate is compared numerically so 0.07 equals 0.070. */
-  private List<TaxLine> taxRollup(List<Transaction> txs) {
-    Map<String, TaxLine> grouped = new LinkedHashMap<>();
-    for (Transaction t : txs) {
-      for (TaxLine l : t.taxLines()) {
-        String key = l.name() + "|" + (l.rate() == null ? "" : l.rate().stripTrailingZeros().toPlainString());
-        grouped.merge(
-            key, l, (a, b) -> new TaxLine(a.name(), a.rate(), a.amount().add(b.amount())));
-      }
-    }
-    return List.copyOf(grouped.values());
-  }
-
-  private List<FeeLine> feeRollup(List<Transaction> txs) {
-    Map<String, FeeLine> grouped = new LinkedHashMap<>();
-    for (Transaction t : txs) {
-      for (FeeLine l : t.feeLines()) {
-        grouped.merge(l.name(), l, (a, b) -> new FeeLine(a.name(), a.amount().add(b.amount())));
-      }
-    }
-    return List.copyOf(grouped.values());
-  }
-
-  /** A transaction id listed twice is rejected with 409 rather than deduped, so nothing is silently dropped. */
+  /** A repeated id is a 409, not silently deduped. */
   private List<String> parseIds(JsonNode body) {
     if (body == null || !body.isObject()) {
       throw ApiException.badRequest("request body must be a JSON object");
